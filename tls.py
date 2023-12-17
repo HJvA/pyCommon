@@ -1,24 +1,44 @@
 """ small general purpose helpers """
-import sys
+import sys,os
 if sys.implementation.name == "micropython":
-	from utime import time	# type: ignore
+	#from utime import time	# type: ignore
+	import utime as time
 	import machine				# type: ignore
 	_S_DELTA = 946681200		# 2000-1-1  to 1970-1-1	=10957 days
+	class Logger():  # TODO cmplete implementation
+		DEBUG,INFO,WARNING,ERROR,CRITICAL = (10,20,30,40,50) 
+		def __init__(self,*args, **kwargs):
+			pass
+		def isEnabledFor(self, _):
+			return False
+		def debug(self, msg, *args):
+			pass
+		def info(self, msg, *args):
+			pass
+		def warning(self, msg, *args):
+			pass
+		def error(self, msg, *args):
+			pass
+		def getLogger(self, name):
+			return Logger()
+	logging = Logger()
 else:
 	import datetime
-	from time import time	# type ignore
+	import time	# type ignore
 	_S_DELTA = 0
+	import logging
+	import threading
+	import hmac
+	from pathlib import Path
+	from enum import Enum
+	if os.name=='nt':
+		import msvcrt
+	else:
+		import termios,select  # atexit
 
-import logging
-import os,re
-import threading
-import hashlib, hmac
-from pathlib import Path
-from enum import Enum
-if os.name=='nt':
-	import msvcrt
-else:
-	import termios,select  # atexit
+import re
+import hashlib
+
 
 def bytes_to_int(data, endian='>', signed=True):
 	"""Convert a bytearray into an integer, considering the first bit sign."""
@@ -90,16 +110,17 @@ class clavier():
 		new_settings[6][termios.VTIME] = 0 # cc
 		termios.tcsetattr(sys.stdin, termios.TCSADRAIN, new_settings)
 		"""
-		if os.isatty(self.fd):
-			#tty.setcbreak(self.fd)
-			new_term = termios.tcgetattr(self.fd)
-			self.old_term = termios.tcgetattr(self.fd)
-			new_term[3] = (new_term[3] & ~termios.ICANON & ~termios.ECHO)
-			termios.tcsetattr(self.fd, termios.TCSAFLUSH, new_term)
+		if sys.implementation.name != "micropython":
+			if os.isatty(self.fd):
+				#tty.setcbreak(self.fd)
+				new_term = termios.tcgetattr(self.fd)
+				self.old_term = termios.tcgetattr(self.fd)
+				new_term[3] = (new_term[3] & ~termios.ICANON & ~termios.ECHO)
+				termios.tcsetattr(self.fd, termios.TCSAFLUSH, new_term)
 		return self
 	def __exit__(self, exc_type, exc_value, traceback):
 		#logger.debug("kbexit")
-		if os.name == 'nt':
+		if sys.implementation.name == "micropython" or os.name == 'nt':
 			pass
 		elif os.isatty(self.fd):
 			termios.tcsetattr(self.fd, termios.TCSAFLUSH, self.old_term)
@@ -108,6 +129,8 @@ class clavier():
 	def kbhit(self):
 		''' Returns True if keyboard character was hit, False otherwise.
 		'''
+		if sys.implementation.name == "micropython":
+			return False # TODO
 		if os.name == 'nt':
 			return msvcrt.kbhit()
 		elif os.isatty(self.fd):
@@ -119,6 +142,8 @@ class clavier():
 	def getch(self):
 		''' Returns a keyboard character after kbhit() has been called. Should not be called in the same program as getarrow().
 		'''
+		if sys.implementation.name == "micropython":
+			return ""  # TODO
 		if os.name == 'nt':
 			return msvcrt.getch().decode('utf-8')
 		elif os.isatty(self.fd):
@@ -201,100 +226,102 @@ class RepeatTimer(object):
 		self._timer.join() # hold main tread till realy finished
 		self.is_running = False	
 
-class logFormatter(logging.Formatter):
-	""" https://en.m.wikipedia.org/wiki/ANSI_escape_code 
-	"""
-	etyp = Enum('etyp', 'ANSI MARKDOWN EMOJI')
-	#Colors = Enum('Colors', 'BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE')
-	BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = [x+30 for x in range(8)]
-	RESET, BOLD, UNDERL,BLINK, INVERS,CONCEALED = (0,1,4,5,7,8)
-	def __init__(self, formatType=etyp.ANSI):
-		self.frmtyp = formatType
-	def fmt(self, clr=RED, stl=BOLD, on=True):
-		if on:
-			return "\033[{};{}m".format(stl,clr)
-		return "\033[{};{}m".format(stl+20, WHITE)
-	
-	EMOJI = {  #  https://github.com/ikatyang/emoji-cheat-sheet
-		logging.WARNING: '⚠️',
-		logging.INFO:'💡', # ℹ️
-		logging.DEBUG:'🔅', #  '✳️',
-		logging.CRITICAL:'❌',
-		logging.ERROR:'‼️'
-	}
-	MRKDWN = {
-		logging.WARNING: '<span style="color:yellow">',
-		logging.INFO: '<span style="color:pink">',
-		logging.DEBUG: '<span style="color:blue">',
-		logging.CRITICAL: '<span style="color:red">',
-		logging.ERROR: '<span style="color:orange">'
+if sys.implementation.name != "micropython":
+	class logFormatter(logging.Formatter):
+		""" https://en.m.wikipedia.org/wiki/ANSI_escape_code 
+		"""
+		etyp = Enum('etyp', 'ANSI MARKDOWN EMOJI')
+		#Colors = Enum('Colors', 'BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE')
+		BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = [x+30 for x in range(8)]
+		RESET, BOLD, UNDERL,BLINK, INVERS,CONCEALED = (0,1,4,5,7,8)
+		def __init__(self, formatType=etyp.ANSI):
+			self.frmtyp = formatType
+		def fmt(self, clr=RED, stl=BOLD, on=True):
+			if on:
+				return "\033[{};{}m".format(stl,clr)
+			return "\033[{};{}m".format(stl+20, WHITE)
+		
+		EMOJI = {  #  https://github.com/ikatyang/emoji-cheat-sheet
+			logging.WARNING: '⚠️',
+			logging.INFO:'💡', # ℹ️
+			logging.DEBUG:'🔅', #  '✳️',
+			logging.CRITICAL:'❌',
+			logging.ERROR:'‼️'
 		}
+		MRKDWN = {
+			logging.WARNING: '<span style="color:yellow">',
+			logging.INFO: '<span style="color:pink">',
+			logging.DEBUG: '<span style="color:blue">',
+			logging.CRITICAL: '<span style="color:red">',
+			logging.ERROR: '<span style="color:orange">'
+			}
+		
+		#levelname_color = COLOR_SEQ % (30 + COLORS[levelname]) + levelname + RESET_SEQ
+		#record.levelname = levelname_color
+		
 	
-	#levelname_color = COLOR_SEQ % (30 + COLORS[levelname]) + levelname + RESET_SEQ
-	#record.levelname = levelname_color
-	
-
-	def format(self, record):
-		#_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
-		_format = " %(message)s "
-		if record.levelno>=logging.WARNING:
-			_format += " [%(filename)s:%(lineno)d]"
-			if record.levelno>=logging.ERROR:
-				_format = "%(asctime)s" + _format
-				if record.levelno==logging.ERROR:
-					_format += " %(stack_info)s "
-		tim_fmt ="%d %H:%M:%S"
-		if self.frmtyp == logFormatter.etyp.ANSI:
-			grey = "\x1b[38;20m"
-			yellow = "\x1b[33;20m"
-			red = "\x1b[31;20m"
-			bold_red = "\x1b[31;1m"
-			reset = "\x1b[0m"
-			FORMATS = {
-				logging.DEBUG: grey + _format + reset,
-				logging.INFO: grey + _format + reset,
-				logging.WARNING: yellow + _format + reset,
-				logging.ERROR: red + _format + reset,
-				logging.CRITICAL: bold_red + _format + reset
-				}
-			log_fmt = FORMATS.get(record.levelno)
-		elif self.frmtyp == logFormatter.etyp.EMOJI:
-			log_fmt =  logFormatter.EMOJI.get(record.levelno) + _format
-			#time.strftime("%d %H:%M:%S", datetime.fromtimestamp(record.created))
-		elif self.frmtyp == logFormatter.etyp.MARKDOWN:
-			_reset = "</span>"
-			log_fmt = logFormatter.MRKDWN.get(record.levelno)+_format+_reset+"  "
-		formatter = logging.Formatter(log_fmt, tim_fmt)
-		return formatter.format(record)
+		def format(self, record):
+			#_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s:%(lineno)d)"
+			_format = " %(message)s "
+			if record.levelno>=logging.WARNING:
+				_format += " [%(filename)s:%(lineno)d]"
+				if record.levelno>=logging.ERROR:
+					_format = "%(asctime)s" + _format
+					if record.levelno==logging.ERROR:
+						_format += " %(stack_info)s "
+			tim_fmt ="%d %H:%M:%S"
+			if self.frmtyp == logFormatter.etyp.ANSI:
+				grey = "\x1b[38;20m"
+				yellow = "\x1b[33;20m"
+				red = "\x1b[31;20m"
+				bold_red = "\x1b[31;1m"
+				reset = "\x1b[0m"
+				FORMATS = {
+					logging.DEBUG: grey + _format + reset,
+					logging.INFO: grey + _format + reset,
+					logging.WARNING: yellow + _format + reset,
+					logging.ERROR: red + _format + reset,
+					logging.CRITICAL: bold_red + _format + reset
+					}
+				log_fmt = FORMATS.get(record.levelno)
+			elif self.frmtyp == logFormatter.etyp.EMOJI:
+				log_fmt =  logFormatter.EMOJI.get(record.levelno) + _format
+				#time.strftime("%d %H:%M:%S", datetime.fromtimestamp(record.created))
+			elif self.frmtyp == logFormatter.etyp.MARKDOWN:
+				_reset = "</span>"
+				log_fmt = logFormatter.MRKDWN.get(record.levelno)+_format+_reset+"  "
+			formatter = logging.Formatter(log_fmt, tim_fmt)
+			return formatter.format(record)
 
 def set_logger(logger, pyfile=None, levelConsole=logging.INFO, levelLogfile=logging.DEBUG, destDir='~/log/'):
 	""" reset logger to desired config having several handlers :
 	Console; logFile; errorLogFile"""
-	[logger.removeHandler(h) for h in logger.handlers[::-1]] # handlers may persist between calls
-	hand=logging.StreamHandler()
-	hand.setLevel(levelConsole)
-	hand.setFormatter(logFormatter(logFormatter.etyp.ANSI))
-	logger.addHandler(hand)	# use console
-	if destDir:
-		destDir = os.path.expanduser(destDir)
-		if not os.path.isdir(destDir):
-			Path(destDir).mkdir(parents=False, exist_ok=False)
-	# always save errors to a file
-	hand = logging.FileHandler(filename=destDir+'error_fsHome.md', mode='a')
-	hand.setLevel(logging.ERROR)	# error and critical
-	hand.setFormatter(logFormatter(logFormatter.etyp.MARKDOWN))
-	logger.addHandler(hand)
-	
-	reBASE=r"([^/]+)(\.\w+)$"
-	base = re.search(reBASE,pyfile)
-	if base:
-		base=base.group(1)
-	else:
-		base=__name__
-	hand = logging.FileHandler(filename=destDir+base+'.log', mode='w', encoding='utf-8')
-	hand.setFormatter(logFormatter(logFormatter.etyp.EMOJI))
-	logger.addHandler(hand)
-	logger.setLevel(levelLogfile)
+	if sys.implementation.name != "micropython":
+		[logger.removeHandler(h) for h in logger.handlers[::-1]] # handlers may persist between calls
+		hand=logging.StreamHandler()
+		hand.setLevel(levelConsole)
+		hand.setFormatter(logFormatter(logFormatter.etyp.ANSI))
+		logger.addHandler(hand)	# use console
+		if destDir:
+			destDir = os.path.expanduser(destDir)
+			if not os.path.isdir(destDir):
+				Path(destDir).mkdir(parents=False, exist_ok=False)
+		# always save errors to a file
+		hand = logging.FileHandler(filename=destDir+'error_fsHome.md', mode='a')
+		hand.setLevel(logging.ERROR)	# error and critical
+		hand.setFormatter(logFormatter(logFormatter.etyp.MARKDOWN))
+		logger.addHandler(hand)
+		
+		reBASE=r"([^/]+)(\.\w+)$"
+		base = re.search(reBASE,pyfile)
+		if base:
+			base=base.group(1)
+		else:
+			base=__name__
+		hand = logging.FileHandler(filename=destDir+base+'.log', mode='w', encoding='utf-8')
+		hand.setFormatter(logFormatter(logFormatter.etyp.EMOJI))
+		logger.addHandler(hand)
+		logger.setLevel(levelLogfile)
 	if pyfile == "__main__":
 		logger.error("### running %s dd %s logging to %s ###" % (__name__,time.strftime("%y%m%d %H:%M:%S"),destDir+base+'.log'))
 	return logger
@@ -304,7 +331,10 @@ def get_logger(pyfile=None, levelConsole=logging.INFO, levelLogfile=logging.DEBU
 		pyfile=None   : called by package as sub module : logger from __main__ to be used
 		pyfile=__file__ : called by main or testing module : create new logger
 	  '''
-	root = sys.modules['__main__'].__file__
+	if sys.implementation.name == "micropython":
+		root ="" # TODO
+	else:
+		root = sys.modules['__main__'].__file__
 	if pyfile is None or pyfile!=root:
 		return logging.getLogger(__name__)	# get logger from main program
 	logger = logging.getLogger()
@@ -335,17 +365,23 @@ if __name__ == "__main__":
 	#set_logger(level=logging.INFO)
 	#logging.basicConfig(level=logging.DEBUG, format='%(levelname)s - %(message)s')
 	logger = get_logger(__file__, logging.DEBUG)
-	print('hand %d lev %s' % (len(logger.handlers), logger.handlers[0].flush()))
+	if sys.implementation.name != "micropython":
+		print('hand %d lev %s' % (len(logger.handlers), logger.handlers[0].flush()))
 	#logger.handlers[0].setLevel(logging.DEBUG)
 	#logger.setLevel(logging.DEBUG)
 	logger.info('hallo wereld')
 	logger.debug('debugging')
 	logger.warning(os.getcwd())
-	logger.error(os.getlogin())
+	if sys.implementation.name != "micropython":
+		logger.error(os.getlogin())
 	
 	#while True:
 	#with keybHit() as kb:
-	with clavier(-1 if os.getgid()<100 else None) as kb:
+	if sys.implementation.name == "micropython":
+		fd=None
+	else:
+		fd =-1 if os.getgid()<100 else None
+	with clavier(fd) as kb:
 		while True:
 			if kb.kbhit():
 				key = kb.getch()
