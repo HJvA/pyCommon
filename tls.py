@@ -14,11 +14,11 @@ if sys.implementation.name == "micropython":
 		def debug(self, msg, *args):
 			pass
 		def info(self, msg, *args):
-			pass
+			print(msg)
 		def warning(self, msg, *args):
-			pass
+			print(msg)
 		def error(self, msg, *args):
-			pass
+			print(msg)
 		def getLogger(self, name):
 			return Logger()
 	logging = Logger()
