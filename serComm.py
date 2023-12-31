@@ -152,7 +152,7 @@ class serComm(object):
 		logger.debug("cmd:%s" % data)
 		self.write(data)
 	
-	def get_info(self, command):
+	def query(self, command):  # get_info
 		""" queries device with command """
 		self.write(command)
 		return self.read(timeout=5, termin=b'\n')
