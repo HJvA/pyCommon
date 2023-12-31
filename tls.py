@@ -342,6 +342,11 @@ def get_logger(pyfile=None, levelConsole=logging.INFO, levelLogfile=logging.DEBU
 	logger.critical("starting %s dd %s" % (root, time.strftime("%d %H:%M:%S", time.localtime())))
 	return logger
 
+def logmsg(logger, msg, level=logging.DEBUG): # TODO
+	fn = sys._getframe(1).f_code.co_name
+	rec = logger.makeRecord(name, level, fn, lno, msg, args, exc_info, func=None, extra=None, sinfo=None)
+	logger.handle(rec)
+
 def hash_new_password(password: str, salt = None): # -> Tuple[bytes, bytes]:
 	"""
     Hash the provided password with a randomly-generated salt and return the
