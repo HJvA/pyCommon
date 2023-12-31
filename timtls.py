@@ -10,6 +10,7 @@ if sys.implementation.name == "micropython":
 	from utime import time,gmtime	# type: ignore
 	import machine				# type: ignore
 	_S_DELTA = 946681200		# 2000-1-1  to 1970-1-1	=10957 days
+	timezone = -3600  # CET ofs for local time
 else:
 	import datetime
 	from time import time,timezone	# type ignore
@@ -20,6 +21,10 @@ else:
 		return (utcnow - epoch).total_seconds()
 
 _MJD = float(2400000.5)
+
+def find_min_index(lst):
+	min_index = min(range(len(lst)), key=lambda i: lst[i])
+	return min_index
 
 def localtime(julianday):
 	""" time struct incl DST and TZ """
@@ -38,9 +43,9 @@ def julianday(tunix = None, isMJD=False) -> float:
 	if tunix is None:
 		if sys.implementation.name == "micropython":
 			if sys.platform=="linux":
-				tunix = gmtime()
+				tunix = gmtime()  # (Y,M,D,H,M,S,,)  utc
 			else:
-				tunix = list(machine.RTC().datetime()) # tuple (Y,M,D,H,M,S,,,)
+				tunix = list(machine.RTC().datetime()) # tuple (Y,M,D,wd,H,M,S,subs)
 				del tunix[3]
 		else:
 			tunix = time()   # float seconds since 00:00:00 Thursday, 1 January 1970
@@ -130,7 +135,7 @@ def JulianDay (gmtime):
     return _JulianDay(gmtime[0],gmtime[1],gmtime[2],\
                       gmtime[3],gmtime[4],gmtime[5])
 
-def TimeTup(JulianDay):
+def TimeTup(JulianDay):  # (Y,M,D,H,M,S,wd,0,0)
     """ return python time struct
         Meeus Astron.Algorith chap.7
         note : not effective with mktime below year 1970
@@ -174,24 +179,27 @@ def prettydate(JulianDay, format="{:%d %H:%M:%S}") -> str:
 		JulianDay=julianday()
 		if sys.implementation.name == "micropython":
 			if sys.platform=="linux":
-				tobj = gmtime()
+				tobj = gmtime() # tuple (Y,M,D,H,M,S,wd,yd)
 			else: # "esp32"
-				tobj = list(machine.RTC().datetime()) # tuple (Y,M,D,H,M,S,,,)
+				tobj = list(machine.RTC().datetime()) # tuple (Y,M,D,wd,H,M,S,subs)
+				del tobj[7]
 				del tobj[3]
 		else:
-			tobj = datetime.datetime.now() #  time.gmtime()
+			tobj = datetime.datetime.utcnow() #  utc time
 	else:
 		if sys.implementation.name == "micropython":
-			tobj = time.gmtime(unixsecond(JulianDay))
+			tobj = gmtime(unixsecond(JulianDay))
 		else:
-			tobj = datetime.datetime.fromtimestamp(unixsecond(JulianDay))
+			#tobj = TimeTup(JulianDay)
+			tobj = datetime.datetime.fromtimestamp(unixsecond(JulianDay))  # named tuple
 		#print("tobj={}".format(tobj.hour))
 	if format=="#j4":
 		fd = int(4*(JulianDay % 1))
 		return ('after noon','evening','night','morning')[fd]	
 	#print("tobj:{}".format(tobj))
 	if sys.implementation.name == "micropython":
-		return("{} {:02d}:{:02d}:{:02d}").format(tobj[2],tobj[4],tobj[5],tobj[6])
+		return ("{:02d}".format(tobj[2]))
+	#	return("{} {:02d}:{:02d}:{:02d}").format(tobj[2],tobj[4],tobj[5],tobj[6])
 	return format.format(tobj)
 	return ("{} {}:{}:{}").format(tobj.tm_mday,tobj.tm_hour,tobj.tm_min,tobj.tm_sec)
 	return time.strftime(format, tobj)
@@ -214,36 +222,99 @@ def prettyprint(fetchrecs) -> None:
 		tm = prettydate(tpl[0])   
 		print("%s %4.3g %s %s" % (tm,tpl[1],tpl[2],tpl[3]))
 
-def graphyprint(fetchrecs, ddfrm = "%a %H:%M", xcol=0, ycol=1) -> None:
+def graphyprint(fetchrecs, xcol=0, ycol=1) -> None:
 	''' print graphically to console selected quantity trace from database '''
 	curve = [rec[ycol] for rec in fetchrecs]
 	printCurve(curve)
-	jdays = [rec[xcol] for rec in fetchrecs]
-	printTimeAx(jdays)
+	xnms = [rec[xcol] for rec in fetchrecs]
+	#print("xnms:{}".format(min(xnms)))
+	if xnms:
+		minx = min(xnms)
+		maxx = max(xnms)
+		if minx>10000: # assumed juliandays
+			printTimeAx(xnms)
+		else:
+			printNumAx(xnms,round((maxx-minx)/4,1)) 
 
 def printTimeAx(jddata) -> None:
-	''' print time x axis to console '''
+	''' print juliandate time x axis to console with | as day separator '''
 	def diffxh(julday, hr24=0):
-		julday -= 0.5
+		""" frac day diff noon """
+		julday -= 0.5 # now jd starts at midnight
 		julday += hr24/24.0
-		julday -= timezone / 60 / 60 / 24
-		return abs(round(julday)-julday)
+		julday -= timezone / 60 / 60 / 24  # go to local time
+		return abs(round(julday)-julday)  # midnight is 0
+	
+	minx=jddata[0]
+	maxx=jddata[-1]
+	if maxx-minx>9:
+		xstp = 7 # a week
+		itm  = 1 # mnth
+	elif maxx-minx>1:
+		xstp=1  # a day
+		itm =2  # mday
+	else:
+		xstp =1/24.0 # an hour
+		itm =3  # hour
+	nminx = (minx//xstp)*xstp  # normalise to multiples of xstp
+	stps = [nminx+i*xstp+xstp for i in range(int((maxx-minx)//xstp))]
+	
+	print('graph min:{} {} max:{} {} xstp={} nstps={} today@{}'.format( nminx,miny,maxx,maxy, xstp,len(stps),utcnow))
+
 	noon=-3
+	print(chr(0x2595),end='')
 	print("=",end='')
 	for i in range(len(jddata)-2):
 		df = [diffxh(jd) for jd in jddata[i:i+3]]
-		if df.index(min(df))==1:
+		if df.index(min(df))==1: # mid close to midnight
 			print("|",end='')
 			#logger.debug("marker@%s df:%s jd=%.5f" % (prettydate(jddata[i+1]),df,jddata[i+1]))
-		elif df.index(max(df))==1:
-			print(prettydate(jddata[i+1],"%a"),end='')
+		elif df.index(max(df))==1: # mid close to noon
+			print(prettydate(jddata[i+1],"{:%02d}"),end='')
+			noon=i+1
+		elif i>noon: # skip lbl size
+			print("-",end='')
+	print("=")
+
+	
+def printNumAx(nmdata, interv=0.5):  # TODO!!
+	pos=0
+	print(chr(0x2595),end='')
+	print(chr(0x2594),end='')
+	refx = int(nmdata[0] / interv) * interv + interv
+	sepx = refx-interv/2
+	ofsx = interv*0.0
+	if sepx<nmdata[0]:
+		sepx+=interv
+	for i in range(len(nmdata)-1):
+		#df = [(nm % interv) for nm in nmdata[i:i+3]]
+		if i>pos:
+			if nmdata[i]>refx+ofsx:
+				#nms = "{:.3}".format(nmdata[i])
+				nms = "{:03.3g}".format(refx)
+				print(nms,end='')
+				refx += interv
+				pos+=len(nms)-1
+			elif nmdata[i]>sepx:
+				print(chr(0x2579),end='') # tic mark
+				sepx += interv
+			elif i>pos:
+				print(chr(0x2594),end='')
+			pos+=1
+	print(chr(0x2594))
+	return
+	"""		
+		if df.index(max(df))==1:
+			print("|",end='')
+		elif df.index(min(df))==1:
+			print("{}".format(nmdata[i+1]),end='')
 			noon=i+1
 		elif i>noon+1:
 			print("-",end='')
 	print("=")
-	
+	"""
 
-def printCurve(data, height=10, vmax=None, vmin=None, backgndchar=0x2581) -> None:
+def printCurve(data, height=10, vmax=None, vmin=None, backgndchar=0x2508) -> None:
 	''' print float data array graphically to console using block char fillings '''
 	if data is None or len(data)==0:
 		#logger.error("no data to graph")	
@@ -258,18 +329,21 @@ def printCurve(data, height=10, vmax=None, vmin=None, backgndchar=0x2581) -> Non
 		sf = (height-1)/(vmax-vmin)
 	#logger.info("curve min=%f max=%f sf=%f" % (vmin,vmax,sf))
 	for ln in range(height-1,-1,-1):  # 9..0
+		print(chr(0x2595),end='')
 		for y in data:
 			lny = (y-vmin)*sf
 			if ln < lny-1:
-				print(chr(0x2588),end='')
+				print(chr(0x2588),end='')  # bar body
 			elif ln < lny:
-				print(chr(0x2581+int((lny-ln)*8.0)),end='')	
+				print(chr(0x2581+int((lny-ln)*8.0)),end='')	 # top of bar
 			else:
-				print(chr(backgndchar),end='')
-		print("|%4.3g" % (vmin + (ln)/sf,))
+				print(chr(backgndchar),end='')  # grid
+		print(chr(0x258f),"{:03.3g}".format(vmin+ 1/sf/2 + ln/sf))  # labels y-ax
 
 if __name__ == "__main__":
-	print("{}-{}".format(sys.implementation.name,  os.uname().sysname if 'uname' in dir(os) else sys.platform))
+	if sys.implementation.name != "micropython":
+		import pdb
+	print("{}-{} tz:{}s".format(sys.implementation.name,  os.uname().sysname if 'uname' in dir(os) else sys.platform, timezone))
 	NAIS = (1961,3,12, 15,10,0,0)
 	jdhj = julianday(NAIS)
 	print(' JD: hj={} = jt:{} on wd:{}'.format(jdhj,JulianTime(jdhj),weekday(jdhj)))
@@ -284,8 +358,20 @@ if __name__ == "__main__":
 	jdnow = julianday(nw,True)
 	jdt = julianday(isMJD=True)
 	print('MJDnow= jdnow={} jdt={} wd={} jt={}'.format(jdnow,jdt,weekday(jdt,True),JulianTime(jdt,True)))
+	if sys.implementation.name != "micropython":
+		pdb.set_trace()
 	
+	recs = []
+	ndays = 2
+	utcofs = timezone /60/60/24 # days ofs
+	jd0 = julianday()  #_JulianDay(2023,12,1)
+	for h in range(-24*ndays,1):
+		jd = (h/24.0) #+ jd0   # ndays back till jd0 local time
+		F,Z = math.modf(jd+0.5-utcofs) # F=0 is midnight local time
+		recs.append((jd, math.sin(math.pi*(F-0.25)*2.0), F*24))
+	print("recs:{}".format(recs))
+	graphyprint(recs)
 else:
 	pass
 	#logger = logging.getLogger(__name__)	# get logger from main program
-	
+print("\nbye")
