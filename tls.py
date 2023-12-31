@@ -280,7 +280,7 @@ def set_logger(logger, pyfile=None, levelConsole=logging.INFO, levelLogfile=logg
 		if not os.path.isdir(destDir):
 			Path(destDir).mkdir(parents=False, exist_ok=False)
 	# always save errors to a file
-	hand = logging.FileHandler(filename=destDir+'error_fsHome.md', mode='a')
+	hand = logging.FileHandler(filename=destDir+'error_logger.md', mode='a')
 	hand.setLevel(logging.ERROR)	# error and critical
 	hand.setFormatter(logFormatter(logFormatter.etyp.MARKDOWN))
 	logger.addHandler(hand)
