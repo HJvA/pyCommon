@@ -19,7 +19,7 @@ else:
 	def seconds_since_epoch(epoch = datetime.datetime.utcfromtimestamp(0), utcnow=datetime.datetime.utcnow()):
 		''' time in s since 1970-1-1 midnight utc'''
 		return (utcnow - epoch).total_seconds()
-
+	
 _MJD = float(2400000.5)
 
 def find_min_index(lst):
@@ -219,7 +219,8 @@ def SiNumForm(num) -> str:
 def prettyprint(fetchrecs) -> None:
 	''' print the records fetched by fetch method to the console '''
 	for tpl in fetchrecs:
-		tm = prettydate(tpl[0])   
+		tm = prettydate(tpl[0])
+		logger.debug("{} {:4.3g} {} {}".format(tm,tpl[1],tpl[2],tpl[3]))
 		print("%s %4.3g %s %s" % (tm,tpl[1],tpl[2],tpl[3]))
 
 def graphyprint(fetchrecs, xcol=0, ycol=1) -> None:
@@ -236,46 +237,71 @@ def graphyprint(fetchrecs, xcol=0, ycol=1) -> None:
 		else:
 			printNumAx(xnms,round((maxx-minx)/4,1)) 
 
-def printTimeAx(jddata) -> None:
-	''' print juliandate time x axis to console with | as day separator '''
-	def diffxh(julday, hr24=0):
-		""" frac day diff noon """
-		julday -= 0.5 # now jd starts at midnight
-		julday += hr24/24.0
-		julday -= timezone / 60 / 60 / 24  # go to local time
-		return abs(round(julday)-julday)  # midnight is 0
+""" {ndays:(lbl,avgmin,gridstep,lblformat),} """
+tmBACKs={0.2:(u'5hr',5,0.0417,'{:%H}'),
+	1.0:(u'1day',15,0.25,'#j4'),  #'%H:%M'), 
+	5.0:(u'5days',20,1,'{:%d}'),
+	30.44:(u'1mnth',6*60,7,'wk{:%V}'), 
+	182.6:(u'6mnth',24*60,30.44,'{:%b}'), 
+	365.25:(u'1yr',2*24*60,30.44,'{:%b}') }
+
+def tmTUP(ndays):
+	if ndays in tmBACKs:
+		return tmBACKs[ndays]
+	else:
+		for d,tup in tmBACKs.items():
+			if d>=ndays:
+				return tup
+	return tmBACKs[1.0]
 	
+def printTimeAx(jddata) -> None:
+	''' print juliandate time x axis to console with | as day separator '''	
 	minx=jddata[0]
 	maxx=jddata[-1]
+	#ndays = maxx-minx
 	if maxx-minx>9:
-		xstp = 7 # a week
+		xstp = 7.0 # a week
 		itm  = 1 # mnth
 	elif maxx-minx>1:
-		xstp=1  # a day
+		xstp=1.0  # a day
 		itm =2  # mday
 	else:
-		xstp =1/24.0 # an hour
+		xstp =1.0/24.0 # an hour
 		itm =3  # hour
+	ndays = xstp
+	#if ndays not in tmBACKs:
+	#	ndays=1.0
 	nminx = (minx//xstp)*xstp  # normalise to multiples of xstp
 	stps = [nminx+i*xstp+xstp for i in range(int((maxx-minx)//xstp))]
+	xlbltup = tmTUP(xstp) # tmBACKs[ndays]
+	lblformat=xlbltup[3]
+	gridstep=xlbltup[2]
+	avgmin=xlbltup[1]  # barwdt avgminutes = xlbltup[1]
 	
-	print('graph min:{} {} max:{} {} xstp={} nstps={} today@{}'.format( nminx,miny,maxx,maxy, xstp,len(stps),utcnow))
-
-	noon=-3
+	logger.debug('timeAx min:{} max:{} xstp={} nstps={}'.format( nminx,maxx, xstp,len(stps)))
+	pos=0
+	refx = int(minx / xstp) * xstp + xstp
+	sepx = refx-gridstep/2
+	ofsx = xstp*0.0
+	if sepx<jddata[0]:
+		sepx+=gridstep
 	print(chr(0x2595),end='')
-	print("=",end='')
-	for i in range(len(jddata)-2):
-		df = [diffxh(jd) for jd in jddata[i:i+3]]
-		if df.index(min(df))==1: # mid close to midnight
-			print("|",end='')
-			#logger.debug("marker@%s df:%s jd=%.5f" % (prettydate(jddata[i+1]),df,jddata[i+1]))
-		elif df.index(max(df))==1: # mid close to noon
-			print(prettydate(jddata[i+1],"{:%02d}"),end='')
-			noon=i+1
-		elif i>noon: # skip lbl size
-			print("-",end='')
-	print("=")
-
+	print(chr(0x2594),end='')
+	for i in range(len(jddata)-1):
+		if i>pos:
+			if jddata[i]>refx+ofsx:
+				#nms = "{:.3}".format(nmdata[i])
+				nms = prettydate(refx,lblformat) # "{:%02d}") #"{:03.3g}".format(refx)
+				print(nms,end='')
+				refx += gridstep
+				pos+=len(nms)-1
+			elif jddata[i]>sepx:
+				print(chr(0x2579),end='') # tic mark
+				sepx += gridstep
+			elif i>pos:
+				print(chr(0x2594),end='')
+			pos+=1
+	print(chr(0x2594))
 	
 def printNumAx(nmdata, interv=0.5):  # TODO!!
 	pos=0
@@ -286,6 +312,7 @@ def printNumAx(nmdata, interv=0.5):  # TODO!!
 	ofsx = interv*0.0
 	if sepx<nmdata[0]:
 		sepx+=interv
+	logger.debug("numXax nx:{} refx:{} interv:{}".format(len(nmdata),refx,interv))
 	for i in range(len(nmdata)-1):
 		#df = [(nm % interv) for nm in nmdata[i:i+3]]
 		if i>pos:
@@ -302,18 +329,7 @@ def printNumAx(nmdata, interv=0.5):  # TODO!!
 				print(chr(0x2594),end='')
 			pos+=1
 	print(chr(0x2594))
-	return
-	"""		
-		if df.index(max(df))==1:
-			print("|",end='')
-		elif df.index(min(df))==1:
-			print("{}".format(nmdata[i+1]),end='')
-			noon=i+1
-		elif i>noon+1:
-			print("-",end='')
-	print("=")
-	"""
-
+	
 def printCurve(data, height=10, vmax=None, vmin=None, backgndchar=0x2508) -> None:
 	''' print float data array graphically to console using block char fillings '''
 	if data is None or len(data)==0:
@@ -327,9 +343,9 @@ def printCurve(data, height=10, vmax=None, vmin=None, backgndchar=0x2508) -> Non
 		sf=1.0
 	else:
 		sf = (height-1)/(vmax-vmin)
-	#logger.info("curve min=%f max=%f sf=%f" % (vmin,vmax,sf))
+	logger.debug("curve min={} max={} scale={}".format(vmin,vmax,sf))
 	for ln in range(height-1,-1,-1):  # 9..0
-		print(chr(0x2595),end='')
+		print(chr(0x2595),end='') # left Yax
 		for y in data:
 			lny = (y-vmin)*sf
 			if ln < lny-1:
@@ -372,6 +388,6 @@ if __name__ == "__main__":
 	print("recs:{}".format(recs))
 	graphyprint(recs)
 else:
-	pass
-	#logger = logging.getLogger(__name__)	# get logger from main program
+	import logging
+	logger = logging.getLogger(__name__)	# get logger from main program
 print("\nbye")

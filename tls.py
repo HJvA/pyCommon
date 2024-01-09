@@ -21,6 +21,8 @@ if sys.implementation.name == "micropython":
 			print(msg)
 		def getLogger(self, name):
 			return Logger()
+		def shutdown(self):
+			pass
 	logging = Logger()
 else:
 	import datetime
