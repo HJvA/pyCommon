@@ -5,6 +5,7 @@ import sys,os,math
 #import logging
 import re
 #from typing import Tuple
+from collections import namedtuple
 
 if sys.implementation.name == "micropython":
 	from utime import time,gmtime	# type: ignore
@@ -29,13 +30,6 @@ def find_min_index(lst):
 def localtime(julianday):
 	""" time struct incl DST and TZ """
 	return time.localtime(unixsecond(julianday))
-
-def unixsecond(julianday):
-	''' convert julianday (UTC) to seconds since actual unix epoch '''
-	if sys.implementation.name == "micropython":
-		return int((julianday - 2440587.5 - 10957.5) * 86400.0)  #  (2000-1970)*365.25
-	else: 
-		return (julianday - 2440587.5) * 86400.0
 
 def julianday(tunix = None, isMJD=False) -> float:
 	''' convert unix time i.e.  to julianday i.e. days since noon on Monday, January 1 4713 BC
@@ -78,6 +72,36 @@ def julianday(tunix = None, isMJD=False) -> float:
 		return (tunix / 86400.0) + 40587.0  # epoch midnight on November 17, 1858.
 	return (tunix / 86400.0 ) + 2440587.5  # epoch noon on Monday, January 1 4713 BC
 
+def _JulianDay (Year,Month,Day, Hour=0,Minute=0,Second=0) -> float:
+    """calculate number of days since beg of year -4712  (=JDN)
+       Astron.Algorith chap.7
+    """
+    if Month==1 or Month==2:
+        Month += 12
+        Year -= 1
+    JD = (Hour + (Minute + Second/60.0) /60) /24
+    JD += math.floor(365.25 * (Year + 4716)) + \
+          math.floor(30.6001 * (Month+1)) + \
+          Day - 1524.5
+    if Year>1582 or \
+       (Year==1582 and
+        (Month>10 or (Month==10 and Day>4))):
+       A = math.floor(Year/100.0)
+       JD += 2.0 - A + math.floor(A/4)
+    return JD
+
+def JulianDay (gmtime):
+    return _JulianDay(gmtime[0],gmtime[1],gmtime[2],\
+                      gmtime[3],gmtime[4],gmtime[5])
+
+
+
+def unixsecond(julianday):
+	''' convert julianday (UTC) to seconds since actual unix epoch '''
+	if sys.implementation.name == "micropython":
+		return int((julianday - 2440587.5 - 10957.5) * 86400.0)  #  (2000-1970)*365.25
+	else: 
+		return (julianday - 2440587.5) * 86400.0
 
 def JulianTime(jdn, isMJD=False): # -> Tuple[int,int,int,int,int,float]:
 	""" get (Y M D H M S) from julianday number see https://quasar.as.utexas.edu/BillInfo/JulianDatesG.html """
@@ -113,27 +137,6 @@ def JulianTime(jdn, isMJD=False): # -> Tuple[int,int,int,int,int,float]:
 	second = minute % 1 * 60	
 	return year,month,int(day),int(hour),int(minute),second
 
-def _JulianDay (Year,Month,Day, Hour=0,Minute=0,Second=0) -> float:
-    """calculate number of days since beg of year -4712  (=JDN)
-       Astron.Algorith chap.7
-    """
-    if Month==1 or Month==2:
-        Month += 12
-        Year -= 1
-    JD = (Hour + (Minute + Second/60.0) /60) /24
-    JD += math.floor(365.25 * (Year + 4716)) + \
-          math.floor(30.6001 * (Month+1)) + \
-          Day - 1524.5
-    if Year>1582 or \
-       (Year==1582 and
-        (Month>10 or (Month==10 and Day>4))):
-       A = math.floor(Year/100.0)
-       JD += 2.0 - A + math.floor(A/4)
-    return JD
-
-def JulianDay (gmtime):
-    return _JulianDay(gmtime[0],gmtime[1],gmtime[2],\
-                      gmtime[3],gmtime[4],gmtime[5])
 
 def TimeTup(JulianDay):  # (Y,M,D,H,M,S,wd,0,0)
     """ return python time struct
@@ -216,6 +219,27 @@ def SiNumForm(num) -> str:
 		return "{:4.0f} ".format(num)
 	return "{:4.3g}{}".format(num/mul,pr)
 
+def normGRdat(fetchrecs, xcol=0, ycol=1):
+	''' normalise fetchrecs to have xdat equidistant; missing recs will have nan in ydat '''
+	xdat = [rec[xcol] for rec in fetchrecs]
+	xmin = min(xdat)
+	xmax = max(xdat)
+	dx = min([xdat[i+1]-xdat[i] for i in range(len(xdat)-1) if xdat[i+1]>xdat[i]])
+	xlen = int((xmax-xmin)/dx)+1
+	logger.debug("normalizing GRdat len:{}->{} dx={}".format(len(xdat),xlen,dx))
+	dat = { int((x-xmin)/dx):idx for (idx,x) in enumerate(xdat)  }
+	ydat = [math.nan] * xlen
+	for i,idx in dat.items():
+		xorg = xdat[idx]
+		x = xmin+i*dx
+		if round(x,6)!=round(xorg,6):
+			logger.warning("xorg:{}!={}".format(xorg,x))
+		if i<len(ydat) and dat[i]<len(fetchrecs):
+			ydat[i] = fetchrecs[dat[i]][ycol]
+		else:
+			logger.warning("i:{}>={} or idx:{}>=len{}".format(i,len(ydat),dat[i],len(fetchrecs)))
+	return [(xmin+i*dx, y) for i,y in enumerate(ydat)]
+	
 def prettyprint(fetchrecs) -> None:
 	''' print the records fetched by fetch method to the console '''
 	for tpl in fetchrecs:
@@ -225,9 +249,10 @@ def prettyprint(fetchrecs) -> None:
 
 def graphyprint(fetchrecs, xcol=0, ycol=1) -> None:
 	''' print graphically to console selected quantity trace from database '''
-	curve = [rec[ycol] for rec in fetchrecs]
+	nrmdat = normGRdat(fetchrecs, xcol, ycol)
+	curve = [rec[1] for rec in nrmdat]
 	printCurve(curve)
-	xnms = [rec[xcol] for rec in fetchrecs]
+	xnms = [rec[0] for rec in nrmdat]
 	#print("xnms:{}".format(min(xnms)))
 	if xnms:
 		minx = min(xnms)
@@ -237,13 +262,14 @@ def graphyprint(fetchrecs, xcol=0, ycol=1) -> None:
 		else:
 			printNumAx(xnms,round((maxx-minx)/4,1)) 
 
+tmAx = namedtuple('tmAx',('lbl','avgmin','tmstep','lblformat'), defaults=(u'1day',15,0.25,'#j4'))
 """ {ndays:(lbl,avgmin,gridstep,lblformat),} """
-tmBACKs={0.2:(u'5hr',5,0.0417,'{:%H}'),
-	1.0:(u'1day',15,0.25,'#j4'),  #'%H:%M'), 
-	5.0:(u'5days',20,1,'{:%d}'),
-	30.44:(u'1mnth',6*60,7,'wk{:%V}'), 
-	182.6:(u'6mnth',24*60,30.44,'{:%b}'), 
-	365.25:(u'1yr',2*24*60,30.44,'{:%b}') }
+tmBACKs={0.2:tmAx(u'5hr',5,0.0417,'{:%H}'),
+	1.0:tmAx(u'1day',15,0.25,'#j4'),  #'%H:%M'), 
+	5.0:tmAx(u'5days',20,1,'{:%d}'),
+	30.44:tmAx(u'1mnth',6*60,7,'wk{:%V}'), 
+	182.6:tmAx(u'6mnth',24*60,30.44,'{:%b}'), 
+	365.25:tmAx(u'1yr',2*24*60,30.44,'{:%b}') }
 
 def tmTUP(ndays):
 	if ndays in tmBACKs:
@@ -268,17 +294,17 @@ def printTimeAx(jddata) -> None:
 	else:
 		xstp =1.0/24.0 # an hour
 		itm =3  # hour
-	ndays = xstp
+	ndays = maxx-minx
 	#if ndays not in tmBACKs:
 	#	ndays=1.0
 	nminx = (minx//xstp)*xstp  # normalise to multiples of xstp
 	stps = [nminx+i*xstp+xstp for i in range(int((maxx-minx)//xstp))]
-	xlbltup = tmTUP(xstp) # tmBACKs[ndays]
+	xlbltup = tmTUP(ndays) # tmBACKs[ndays]
 	lblformat=xlbltup[3]
 	gridstep=xlbltup[2]
 	avgmin=xlbltup[1]  # barwdt avgminutes = xlbltup[1]
 	
-	logger.debug('timeAx min:{} max:{} xstp={} nstps={}'.format( nminx,maxx, xstp,len(stps)))
+	logger.debug('timeAx min:{} max:{} ndays={} xstp:{} nstps={} tup:{}'.format( prettydate(minx),prettydate(maxx), ndays,xstp,len(stps),xlbltup))
 	pos=0
 	refx = int(minx / xstp) * xstp + xstp
 	sepx = refx-gridstep/2
@@ -330,15 +356,15 @@ def printNumAx(nmdata, interv=0.5):  # TODO!!
 			pos+=1
 	print(chr(0x2594))
 	
-def printCurve(data, height=10, vmax=None, vmin=None, backgndchar=0x2508) -> None:
+def printCurve(ydat, height=10, vmax=None, vmin=None, backgndchar=0x2508) -> None:
 	''' print float data array graphically to console using block char fillings '''
-	if data is None or len(data)==0:
+	if ydat is None or len(ydat)==0:
 		#logger.error("no data to graph")	
 		return
 	if vmax is None: 
-		vmax = max(data)
+		vmax = max(ydat)
 	if vmin is None: 
-		vmin = min(data)
+		vmin = min(ydat)
 	if vmax==vmin:
 		sf=1.0
 	else:
@@ -346,7 +372,10 @@ def printCurve(data, height=10, vmax=None, vmin=None, backgndchar=0x2508) -> Non
 	logger.debug("curve min={} max={} scale={}".format(vmin,vmax,sf))
 	for ln in range(height-1,-1,-1):  # 9..0
 		print(chr(0x2595),end='') # left Yax
-		for y in data:
+		for y in ydat:
+			if math.isnan(y):
+				print(chr(backgndchar),end='')
+				continue
 			lny = (y-vmin)*sf
 			if ln < lny-1:
 				print(chr(0x2588),end='')  # bar body
@@ -359,6 +388,8 @@ def printCurve(data, height=10, vmax=None, vmin=None, backgndchar=0x2508) -> Non
 if __name__ == "__main__":
 	if sys.implementation.name != "micropython":
 		import pdb
+	from tls import get_logger
+	logger = get_logger(__name__)
 	print("{}-{} tz:{}s".format(sys.implementation.name,  os.uname().sysname if 'uname' in dir(os) else sys.platform, timezone))
 	NAIS = (1961,3,12, 15,10,0,0)
 	jdhj = julianday(NAIS)
