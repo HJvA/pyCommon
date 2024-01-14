@@ -219,25 +219,37 @@ def SiNumForm(num) -> str:
 		return "{:4.0f} ".format(num)
 	return "{:4.3g}{}".format(num/mul,pr)
 
-def normGRdat(fetchrecs, xcol=0, ycol=1):
+def RoundSignif(num, nsig=3) -> float:
+	if num==0:
+		return 0.0	
+	ndig = nsig-int(math.floor(math.log10(abs(num))))-1 # int(math.floor(math.log10(abs(num)))) + (nsig - 1)
+	return round(num, ndig)
+
+def normGRdat(fetchrecs, xcol=0, ycol=1, maxlen=1000):
 	''' normalise fetchrecs to have xdat equidistant; missing recs will have nan in ydat '''
 	xdat = [rec[xcol] for rec in fetchrecs]
 	xmin = min(xdat)
 	xmax = max(xdat)
-	dx = min([xdat[i+1]-xdat[i] for i in range(len(xdat)-1) if xdat[i+1]>xdat[i]])
-	xlen = int((xmax-xmin)/dx)+1
-	logger.debug("normalizing GRdat len:{}->{} dx={}".format(len(xdat),xlen,dx))
-	dat = { int((x-xmin)/dx):idx for (idx,x) in enumerate(xdat)  }
+	xdx = min([xdat[i+1]-xdat[i] for i in range(len(xdat)-1) if xdat[i+1]>xdat[i]])
+	xlen = maxlen+1 # int((xmax-xmin)/dx)+1
+	dx = 0
+	while xlen>maxlen:
+		dx += xdx
+		xlen = int((xmax-xmin)/dx)+1
+	logger.debug("normalizing GRdat len:{}->{} dx:{}->{}".format(len(xdat),xlen,xdx,dx))
+	dat = { idx:int((x-xmin+0.5)/dx) for (idx,x) in enumerate(xdat)  }
 	ydat = [math.nan] * xlen
-	for i,idx in dat.items():
+	for idx,i in dat.items():
 		xorg = xdat[idx]
 		x = xmin+i*dx
-		if round(x,6)!=round(xorg,6):
+		if abs(x-xorg)>dx:  # round(x,6)!=round(xorg,6):
 			logger.warning("xorg:{}!={}".format(xorg,x))
-		if i<len(ydat) and dat[i]<len(fetchrecs):
-			ydat[i] = fetchrecs[dat[i]][ycol]
+		if i<len(ydat) and idx<len(fetchrecs):
+			if math.isnan(ydat[i]):
+				ydat[i]=0.0
+			ydat[i] += fetchrecs[idx][ycol]
 		else:
-			logger.warning("i:{}>={} or idx:{}>=len{}".format(i,len(ydat),dat[i],len(fetchrecs)))
+			logger.warning("i:{}>={} or idx:{}>=len{}".format(i,len(ydat),idx,len(fetchrecs)))
 	return [(xmin+i*dx, y) for i,y in enumerate(ydat)]
 	
 def prettyprint(fetchrecs) -> None:
@@ -260,9 +272,11 @@ def graphyprint(fetchrecs, xcol=0, ycol=1) -> None:
 		if minx>10000: # assumed juliandays
 			printTimeAx(xnms)
 		else:
-			printNumAx(xnms,round((maxx-minx)/4,1)) 
-
-tmAx = namedtuple('tmAx',('lbl','avgmin','tmstep','lblformat'), defaults=(u'1day',15,0.25,'#j4'))
+			printNumAx(xnms, RoundSignif((maxx-minx)/4,3)) 
+if sys.implementation.name != "micropython":
+	tmAx = namedtuple('tmAx',('lbl','avgmin','tmstep','lblformat'), defaults=('1day',15,0.25,'#j4'))
+else:
+	tmAx = namedtuple('tmAx',('lbl','avgmin','tmstep','lblformat')) #, defaults=('1day',15,0.25,'#j4'))
 """ {ndays:(lbl,avgmin,gridstep,lblformat),} """
 tmBACKs={0.2:tmAx(u'5hr',5,0.0417,'{:%H}'),
 	1.0:tmAx(u'1day',15,0.25,'#j4'),  #'%H:%M'), 
