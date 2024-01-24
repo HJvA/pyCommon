@@ -113,7 +113,7 @@ class clavier():
 		termios.tcsetattr(sys.stdin, termios.TCSADRAIN, new_settings)
 		"""
 		if sys.implementation.name != "micropython":
-			if os.isatty(self.fd):
+			if self.fd and os.isatty(self.fd):
 				#tty.setcbreak(self.fd)
 				new_term = termios.tcgetattr(self.fd)
 				self.old_term = termios.tcgetattr(self.fd)
@@ -302,30 +302,33 @@ def set_logger(logger, pyfile=None, levelConsole=logging.INFO, levelLogfile=logg
 		[logger.removeHandler(h) for h in logger.handlers[::-1]] # handlers may persist between calls
 		hand=logging.StreamHandler()
 		hand.setLevel(levelConsole)
-		hand.setFormatter(logFormatter(logFormatter.etyp.ANSI))
+		hand.setFormatter( logFormatter(logFormatter.etyp.ANSI))
 		logger.addHandler(hand)	# use console
 		if destDir:
 			destDir = os.path.expanduser(destDir)
 			if not os.path.isdir(destDir):
-				Path(destDir).mkdir(parents=False, exist_ok=False)
+				os.mkdir(destdir)
+				#Path(destDir).mkdir(parents=False, exist_ok=False)
 		# always save errors to a file
-		hand = logging.FileHandler(filename=destDir+'error_fsHome.md', mode='a')
+		hand = logging.FileHandler(filename=destDir+'error_home.md', mode='a')
 		hand.setLevel(logging.ERROR)	# error and critical
 		hand.setFormatter(logFormatter(logFormatter.etyp.MARKDOWN))
 		logger.addHandler(hand)
 		
 		reBASE=r"([^/]+)(\.\w+)$"
 		base = re.search(reBASE,pyfile)
+		#base = os.path.basename(pyfile).split('.')[0]
 		if base:
 			base=base.group(1)
 		else:
 			base=__name__
-		hand = logging.FileHandler(filename=destDir+base+'.log', mode='w', encoding='utf-8')
+		hand = logging.FileHandler(filename=os.path.join(destDir,base+'.log'), # destDir+base+'.log',
+mode='w', encoding='utf-8')
 		hand.setFormatter(logFormatter(logFormatter.etyp.EMOJI))
 		logger.addHandler(hand)
 		logger.setLevel(levelLogfile)
 	if pyfile == "__main__":
-		logger.error("### running %s dd %s logging to %s ###" % (__name__,time.strftime("%y%m%d %H:%M:%S"),destDir+base+'.log'))
+		logger.error("### running %s dd %s logging to %s ###" % (__name__,time.strftime("%y%m%d %H:%M:%S"),os.path.join(destDir,base+'.log'))) # destDir+base+'.log'))
 	return logger
 
 def get_logger(pyfile=None, levelConsole=logging.INFO, levelLogfile=logging.DEBUG):
