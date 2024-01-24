@@ -259,9 +259,9 @@ def prettyprint(fetchrecs) -> None:
 		logger.debug("{} {:4.3g} {} {}".format(tm,tpl[1],tpl[2],tpl[3]))
 		print("%s %4.3g %s %s" % (tm,tpl[1],tpl[2],tpl[3]))
 
-def graphyprint(fetchrecs, xcol=0, ycol=1) -> None:
+def graphyprint(fetchrecs, xcol=0, ycol=1, maxlen=164) -> None:
 	''' print graphically to console selected quantity trace from database '''
-	nrmdat = normGRdat(fetchrecs, xcol, ycol)
+	nrmdat = normGRdat(fetchrecs, xcol, ycol, maxlen)
 	curve = [rec[1] for rec in nrmdat]
 	printCurve(curve)
 	xnms = [rec[0] for rec in nrmdat]
