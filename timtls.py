@@ -21,9 +21,10 @@ else:
 		''' time in s since 1970-1-1 midnight utc'''
 		return (utcnow - epoch).total_seconds()
 	
-_MJD = float(2400000.5)
+_MJD = float(2400000.5)  # modified julian day offset
 
 def find_min_index(lst):
+	''' find index where lst[idx]is smallest '''
 	min_index = min(range(len(lst)), key=lambda i: lst[i])
 	return min_index
 
@@ -72,7 +73,7 @@ def julianday(tunix = None, isMJD=False) -> float:
 		return (tunix / 86400.0) + 40587.0  # epoch midnight on November 17, 1858.
 	return (tunix / 86400.0 ) + 2440587.5  # epoch noon on Monday, January 1 4713 BC
 
-def _JulianDay (Year,Month,Day, Hour=0,Minute=0,Second=0) -> float:
+def _JulianDay (Year:int,Month:int,Day:int, Hour=0,Minute=0,Second=0) -> float:
     """calculate number of days since beg of year -4712  (=JDN)
        Astron.Algorith chap.7
     """
@@ -90,7 +91,7 @@ def _JulianDay (Year,Month,Day, Hour=0,Minute=0,Second=0) -> float:
        JD += 2.0 - A + math.floor(A/4)
     return JD
 
-def JulianDay (gmtime):
+def JulianDay (gmtime) -> float:
     return _JulianDay(gmtime[0],gmtime[1],gmtime[2],\
                       gmtime[3],gmtime[4],gmtime[5])
 
@@ -220,6 +221,7 @@ def SiNumForm(num) -> str:
 	return "{:4.3g}{}".format(num/mul,pr)
 
 def RoundSignif(num, nsig=3) -> float:
+	''' round a number to have nsig significant digits '''
 	if num==0:
 		return 0.0	
 	ndig = nsig-int(math.floor(math.log10(abs(num))))-1 # int(math.floor(math.log10(abs(num)))) + (nsig - 1)
