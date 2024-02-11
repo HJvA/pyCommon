@@ -307,7 +307,7 @@ def set_logger(logger, pyfile=None, levelConsole=logging.INFO, levelLogfile=logg
 		if destDir:
 			destDir = os.path.expanduser(destDir)
 			if not os.path.isdir(destDir):
-				os.mkdir(destdir)
+				os.mkdir(destDir)
 				#Path(destDir).mkdir(parents=False, exist_ok=False)
 		# always save errors to a file
 		hand = logging.FileHandler(filename=destDir+'error_home.md', mode='a')

@@ -275,6 +275,7 @@ def graphyprint(fetchrecs, xcol=0, ycol=1, maxlen=164) -> None:
 			printTimeAx(xnms)
 		else:
 			printNumAx(xnms, RoundSignif((maxx-minx)/4,3)) 
+
 if sys.implementation.name != "micropython":
 	tmAx = namedtuple('tmAx',('lbl','avgmin','tmstep','lblformat'), defaults=('1day',15,0.25,'#j4'))
 else:
