@@ -14,10 +14,12 @@ class BrentRootFinder():
 		self.b = xMax #//fb = function(b);
 		self.c = xMax
 		#self.e = math.nan
-		self.fa = math.nan
-		self.fb = math.nan
-		self.fc = math.nan
+		self.fa = function(xMin) #math.nan
+		self.fb = function(xMax) #math.nan
+		self.fc = self.fb
         
+	def __str__(self):
+		return "RootFnd{}: f({:.2f})={:.4g} f({:.2f})={:.4g}".format(self.iter, self.a,self.fa, self.b,self.fb)
 	def Proposition(self, x):
 		fx = self.func(x)
 		if (self.fa * fx < 0):
@@ -76,7 +78,7 @@ class BrentRootFinder():
 		""" propose a new x setpoint to get fx closer to 0 """
 		nextStep=False
 		#double min1, min2, min, p, q, r, s, xm, tol1;
-		if nfb is None or math.isnan(nfb):
+		if nfb is None: # or len(nfb)==0 or math.isnan(nfb[0]):
 			logger.warning("supply funcVal fb:{}".format(nfb))
 		if (nfb * self.fc > 0.0):  # no 0 between b-c 
 			self.c = self.a		# take a for c
