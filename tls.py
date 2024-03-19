@@ -295,7 +295,7 @@ if sys.implementation.name != "micropython":
 			formatter = logging.Formatter(log_fmt, tim_fmt)
 			return formatter.format(record)
 
-def set_logger(logger, pyfile=None, levelConsole=logging.INFO, levelLogfile=logging.DEBUG, destDir='~/log/'):
+def set_logger(logger, pyfile=None, levelConsole=logging.INFO, levelLogfile=logging.DEBUG, destDir='~/log'):
 	""" reset logger to desired config having several handlers :
 	Console; logFile; errorLogFile"""
 	if sys.implementation.name != "micropython":
@@ -310,18 +310,25 @@ def set_logger(logger, pyfile=None, levelConsole=logging.INFO, levelLogfile=logg
 				os.mkdir(destDir)
 				#Path(destDir).mkdir(parents=False, exist_ok=False)
 		# always save errors to a file
-		hand = logging.FileHandler(filename=destDir+'error_home.md', mode='a')
+		hand = logging.FileHandler(filename=os.path.join(destDir,'error_home.md'), mode='a')
 		hand.setLevel(logging.ERROR)	# error and critical
 		hand.setFormatter(logFormatter(logFormatter.etyp.MARKDOWN))
 		logger.addHandler(hand)
 		
+		if pyfile:
+			base = os.path.basename(pyfile)
+			base = os.path.splitext(base)[0]
+		else:
+			base = __name__
+		"""
 		reBASE=r"([^/]+)(\.\w+)$"
 		base = re.search(reBASE,pyfile)
-		#base = os.path.basename(pyfile).split('.')[0]
 		if base:
 			base=base.group(1)
 		else:
 			base=__name__
+		breakpoint()
+		"""
 		hand = logging.FileHandler(filename=os.path.join(destDir,base+'.log'), # destDir+base+'.log',
 mode='w', encoding='utf-8')
 		hand.setFormatter(logFormatter(logFormatter.etyp.EMOJI))
