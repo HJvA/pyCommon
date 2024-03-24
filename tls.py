@@ -246,7 +246,7 @@ if sys.implementation.name != "micropython":
 		EMOJI = {  #  https://github.com/ikatyang/emoji-cheat-sheet
 			logging.WARNING: '⚠️',
 			logging.INFO:'💡', # ℹ️
-			logging.DEBUG:'🔅', #  '✳️',
+			logging.DEBUG:'👁️‍🗨️', #'🔅', #  '✳️',
 			logging.CRITICAL:'❌',
 			logging.ERROR:'‼️'
 		}
