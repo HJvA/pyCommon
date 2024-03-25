@@ -227,6 +227,14 @@ def RoundSignif(num, nsig=3) -> float:
 	ndig = nsig-int(math.floor(math.log10(abs(num))))-1 # int(math.floor(math.log10(abs(num)))) + (nsig - 1)
 	return round(num, ndig)
 
+def RoundGrStep(num) -> float:
+	""" """
+	lg = int(math.log10(num))
+	st = 10**lg
+	if st>num:
+		st /= 2
+	return st
+
 def normGRdat(fetchrecs, xcol=0, ycol=1, maxlen=1000):
 	''' normalise fetchrecs to have xdat equidistant; missing recs will have nan in ydat '''
 	xdat = [rec[xcol] for rec in fetchrecs]
@@ -261,7 +269,7 @@ def prettyprint(fetchrecs) -> None:
 		logger.debug("{} {:4.3g} {} {}".format(tm,tpl[1],tpl[2],tpl[3]))
 		print("%s %4.3g %s %s" % (tm,tpl[1],tpl[2],tpl[3]))
 
-def graphyprint(fetchrecs, xcol=0, ycol=1, maxlen=164) -> None:
+def graphyprint(fetchrecs, xcol=0, ycol=1, maxlen=120) -> None:
 	''' print graphically to console selected quantity trace from database '''
 	nrmdat = normGRdat(fetchrecs, xcol, ycol, maxlen)
 	curve = [rec[1] for rec in nrmdat]
@@ -274,8 +282,9 @@ def graphyprint(fetchrecs, xcol=0, ycol=1, maxlen=164) -> None:
 		if minx>10000: # assumed juliandays
 			printTimeAx(xnms)
 		else:
-			printNumAx(xnms, RoundSignif((maxx-minx)/4,3)) 
+			printNumAx(xnms, RoundGrStep((maxx-minx)/4)) # RoundSignif((maxx-minx)/4,3)) 
 
+# some constants for TimeAxis 
 if sys.implementation.name != "micropython":
 	tmAx = namedtuple('tmAx',('lbl','avgmin','tmstep','lblformat'), defaults=('1day',15,0.25,'#j4'))
 else:
