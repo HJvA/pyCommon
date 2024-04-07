@@ -332,8 +332,8 @@ def printTimeAx(jddata) -> None:
 	
 	logger.debug('timeAx min:{} max:{} ndays={} xstp:{} nstps={} tup:{}'.format( prettydate(minx),prettydate(maxx), ndays,xstp,len(stps),xlbltup))
 	pos=0
-	refx = int(minx / xstp) * xstp + xstp
-	sepx = refx-gridstep/2
+	lblx = int(minx / xstp) * xstp + xstp
+	ticx = lblx-gridstep/2
 	ofsx = xstp*0.0
 	if sepx<jddata[0]:
 		sepx+=gridstep
@@ -341,42 +341,44 @@ def printTimeAx(jddata) -> None:
 	print(chr(0x2594),end='')
 	for i in range(len(jddata)-1):
 		if i>pos:
-			if jddata[i]>refx+ofsx:
+			if jddata[i]>lblx+ofsx:
 				#nms = "{:.3}".format(nmdata[i])
-				nms = prettydate(refx,lblformat) # "{:%02d}") #"{:03.3g}".format(refx)
+				nms = prettydate(lblx,lblformat) # "{:%02d}") #"{:03.3g}".format(lblx)
 				print(nms,end='')
-				refx += gridstep
+				lblx += gridstep
 				pos+=len(nms)-1
-			elif jddata[i]>sepx:
+			elif jddata[i]>ticx:
 				print(chr(0x2579),end='') # tic mark
-				sepx += gridstep
+				ticx += gridstep
 			elif i>pos:
 				print(chr(0x2594),end='')
 			pos+=1
 	print(chr(0x2594))
 	
-def printNumAx(nmdata, interv=0.5):  # TODO!!
+def printNumAx(xdata, ticStep=0.5): 
+	""" print hor axis for graphyprint """
 	pos=0
-	print(chr(0x2595),end='')
+	print(chr(0x2595),end='')  
 	print(chr(0x2594),end='')
-	refx = int(nmdata[0] / interv) * interv + interv
-	sepx = refx-interv/2
-	ofsx = interv*0.0
-	if sepx<nmdata[0]:
-		sepx+=interv
-	logger.debug("numXax nx:{} refx:{} interv:{}".format(len(nmdata),refx,interv))
-	for i in range(len(nmdata)-1):
+	lblx = int(xdata[0] / ticStep) * ticStep + ticStep  # rounded multiple of ticStep
+	ticx = lblx-ticStep/2
+	posStep = (xdata[-1]-xdata[0])/(len(xdata)-1)
+	ofsx = -posStep
+	if ticx<xdata[0]:
+		ticx+=ticStep
+	logger.debug("numXax posStep:{} lblx:{} ticStep:{}".format(posStep,lblx,ticStep))
+	for i in range(len(xdata)-1):
 		#df = [(nm % interv) for nm in nmdata[i:i+3]]
 		if i>pos:
-			if nmdata[i]>refx+ofsx:
+			if xdata[i]>lblx+ofsx:
 				#nms = "{:.3}".format(nmdata[i])
-				nms = "{:03.3g}".format(refx)
+				nms = "{:03.3g}".format(lblx)
 				print(nms,end='')
-				refx += interv
+				lblx += ticStep
 				pos+=len(nms)-1
-			elif nmdata[i]>sepx:
+			elif xdata[i]>ticx:
 				print(chr(0x2579),end='') # tic mark
-				sepx += interv
+				ticx += ticStep
 			elif i>pos:
 				print(chr(0x2594),end='')
 			pos+=1
@@ -442,6 +444,7 @@ if __name__ == "__main__":
 		jd = (h/24.0) #+ jd0   # ndays back till jd0 local time
 		F,Z = math.modf(jd+0.5-utcofs) # F=0 is midnight local time
 		recs.append((jd, math.sin(math.pi*(F-0.25)*2.0), F*24))
+	breakpoint()
 	print("recs:{}".format(recs))
 	graphyprint(recs)
 else:
