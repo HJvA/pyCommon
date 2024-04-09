@@ -6,13 +6,14 @@ import math
 class BrentRootFinder():
 	maxIter = 100;
 	eps = 3e-8  # float precision
-	def __init__(self,function, xMin=0, xMax=1):
+	def __init__(self, function, xMin=0, xMax=1):
 		self.func = function
 		self.iter = 0;
 		self.tol = BrentRootFinder.eps
 		self.a = xMin #//fa = function(a);
 		self.b = xMax #//fb = function(b);
 		self.c = xMax
+		self.e=0
 		#self.e = math.nan
 		self.fa = function(xMin) #math.nan
 		self.fb = function(xMax) #math.nan
@@ -80,7 +81,7 @@ class BrentRootFinder():
 		#double min1, min2, min, p, q, r, s, xm, tol1;
 		if nfb is None: # or len(nfb)==0 or math.isnan(nfb[0]):
 			logger.warning("supply funcVal fb:{}".format(nfb))
-		if (nfb * self.fc > 0.0):  # no 0 between b-c 
+		if nfb * self.fc > 0.0:  # no 0 between b-c 
 			self.c = self.a		# take a for c
 			self.fc = self.fa
 			d = nb - self.a	# adjust bounding interval d
