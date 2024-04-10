@@ -43,10 +43,10 @@ class BrentRootFinder():
 		self.fb = self.func(_b)
 		self.fc = self.fb
 		if (self.fa * self.fb > 0.0):
-			logger.warning("root must be bracketed")
-			return False    #error: root must be bracketed
+			logger.debug("root must be bracketed f({})={}<->f({})={}".format(self.a,self.fa,self.b,self.fb))
+			return None,None    #error: root must be bracketed
 		else:
-			return True
+			return self.fa,self.fb
 
 	def Solve0(self, xStart):
 		if (math.isnan(self.fa)):
