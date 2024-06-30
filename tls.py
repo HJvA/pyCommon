@@ -1,7 +1,7 @@
 """ small general purpose helpers """
-import sys,os
+import sys,os,struct
 if sys.implementation.name == "micropython":
-	#from utime import time	# type: ignore
+	#from utime import time	# type: ignore 
 	import utime as time
 	import machine				# type: ignore
 	_S_DELTA = 946681200		# 2000-1-1  to 1970-1-1	=10957 days
@@ -37,6 +37,8 @@ else:
 		import msvcrt
 	else:
 		import termios,select  # atexit
+	from collections import namedtuple
+	evrec = namedtuple('evrec',('seconds', 'microseconds', 'eventType', 'eventCode', 'value'),defaults=(0,0,0,0,0))
 
 import re
 import hashlib
@@ -92,15 +94,19 @@ def lookup_lod(lod, **kw):
 			return row,i
 	return None,-1
 
+evFRM = 'llHHI'
 class clavier():
 	""" 
 	 https://simondlevy.academic.wlu.edu/files/software/kbhit.py 
 	 https://stackoverflow.com/questions/13207678/whats-the-simplest-way-of-detecting-keyboard-input-in-a-script-from-the-termina/47197390#47197390 
 	"""
 	def __init__(self, fd=None):
-		""" fs==0 : disabled """
-		if fd is not None and fd<0:
-			self.fd=None
+		""" fd==0 : disabled """
+		if fd is not None: 
+			if fd<0:
+				self.fd=None
+			else:
+				self.fd=fd
 		else:
 			self.fd = sys.stdin.fileno()
 		#logger.debug("new clavier, tty:{} ".format( os.isatty(self.fd) ))
@@ -138,8 +144,23 @@ class clavier():
 		elif os.isatty(self.fd):
 			dr,dw,de = select.select([sys.stdin], [], [], 0)
 			return dr != []
-		else:
-			return False
+		elif self.fd:  # TODO read from /dev/input/eventx
+			#time.sleep(1)
+			#fp = os.fdopen(self.fd, 'rb')
+			#sz = os.fstat(self.fd).st_size
+			try:
+				sz = struct.calcsize(evFRM)
+				self.fp24 = os.read(self.fd, sz)  # BlockingIOError
+			except Exception as ex:
+				self.fp24=None
+				return False
+			
+			#with os.fdopen(self.fd, 'rb') as fp:
+			#	self.fp24 = fp.read(24)
+			#	#fp.close()
+			if self.fp24:
+				return True
+		return False
 
 	def getch(self):
 		''' Returns a keyboard character after kbhit() has been called. Should not be called in the same program as getarrow().
@@ -150,6 +171,13 @@ class clavier():
 			return msvcrt.getch().decode('utf-8')
 		elif os.isatty(self.fd):
 			return sys.stdin.read(1)
+		elif self.fd:
+			if self.fp24:
+				tup = struct.unpack(evFRM,self.fp24)
+				return evrec._make(tup)
+				(seconds, microseconds, eventType, eventCode, value) = tup
+				return struct.unpack('4IHHI',self.fp24)  # struct input_event {struct timeval time; unsigned short type; unsigned short code; unsigned int value; };
+				# event : small L) l - long	; (capital H) H - unsigned short; (capital I) I - unsigned int; structFormat = 'llHHI'
 		return ""
 	def getarrow(self):
 		''' Returns an arrow-key code after kbhit() has been called. Codes are
