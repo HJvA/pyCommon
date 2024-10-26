@@ -109,7 +109,7 @@ class clavier():
 				self.fd=fd
 		else:
 			self.fd = sys.stdin.fileno()
-		#logger.debug("new clavier, tty:{} ".format( os.isatty(self.fd) ))
+			logger.debug("new clavier, tty:{} ".format( os.isatty(self.fd) ))
 	def __enter__(self):
 		"""
 		new_settings = termios.tcgetattr(sys.stdin)
@@ -130,7 +130,7 @@ class clavier():
 		#logger.debug("kbexit")
 		if sys.implementation.name == "micropython" or os.name == 'nt':
 			pass
-		elif os.isatty(self.fd):
+		elif self.fd and os.isatty(self.fd):
 			termios.tcsetattr(self.fd, termios.TCSAFLUSH, self.old_term)
 	def __repr__(self):
 		return "clavier on:{} with fd:{}".format(os.name, self.fd)
@@ -195,6 +195,54 @@ class clavier():
 			c = sys.stdin.read(3)[2]
 			vals = [65, 67, 66, 68]
 		return vals.index(ord(c.decode('utf-8')))
+
+CSI = '\033['
+class cursor(clavier):
+	#clav = clavier()
+	def __init__(self, *args):
+		super().__init__(*args)
+		self.pos = self.getpos()
+	def UP(self, n=1):
+		self.pos[0]+=1
+		self.send( CSI + str(n) + 'A')
+	def DOWN(self, n=1):
+		self.pos[0]-=1
+		self.send( CSI + str(n) + 'B')
+	def FORWARD(self, n=1):
+		self.pos[1]+=1
+		self.send(CSI + str(n) + 'C')
+	def BACK(self, n=1):
+		self.pos[1]-=1
+		self.send(CSI + str(n) + 'D')
+	def POS(self, x=1, y=1):
+		self.send(CSI + str(y) + ';' + str(x) + 'H')
+	def send(self, cmd):
+		""" send ANSI terminal command """
+		sys.stdout.write(cmd)
+		sys.stdout.flush()
+	def read(self, eos="\n"):
+		""" !!! only returns after CRLF """
+		cmd=""
+		while eos not in cmd:
+			if self.kbhit():
+				ch = self.getch()  # sys.stdin.read(1)
+				cmd += ch
+			else:
+				time.sleep(0.1)
+		logger.debug('rdcmd:{}'.format(cmd))
+		return cmd
+	def setpos(self, line, column):
+		"""set cursor on ANSI terminal"""
+		self.send(CSI+'%s;%sf' % (line, column))
+		logger.debug('setpos:{},{}'.format(line,column))
+	def getpos(self):
+		""" """
+		self.send(CSI+"6n")
+		instr=self.read(eos='R')  #  sys.stdin.read(6)  # '\x1b[46;1R'
+		gpos = list(map(int, re.findall(r'\d+', instr)))
+		logger.debug('gotpos:{}'.format(gpos))
+		return gpos
+
 	"""
 	def getkey(self, timeout=1):
 		self.resp=None
@@ -407,9 +455,11 @@ def is_correct_password(salt: bytes, pw_hash: bytes, password: str): # -> bool:
 	)
 	
 if __name__ == "__main__":
+	if sys.implementation.name != "micropython":
+		import pdb
 	#set_logger(level=logging.INFO)
 	#logging.basicConfig(level=logging.DEBUG, format='%(levelname)s - %(message)s')
-	logger = get_logger(__file__, logging.DEBUG)
+	logger = get_logger(__file__, logging.INFO, logging.DEBUG)
 	if sys.implementation.name != "micropython":
 		print('hand %d lev %s' % (len(logger.handlers), logger.handlers[0].flush()))
 	#logger.handlers[0].setLevel(logging.DEBUG)
@@ -426,13 +476,25 @@ if __name__ == "__main__":
 		fd=None
 	else:
 		fd =-1 if os.getgid()<100 else None
-	with clavier(fd) as kb:
+	#Cursor.setpos(12,3)
+	#curs = Cursor.getpos()	
+	with cursor(fd) as kb:  # with clavier(fd) as kb:
+		kb.setpos(20,10)
+		breakpoint()
 		while True:
 			if kb.kbhit():
 				key = kb.getch()
 				logger.info("key:{} ord:{}".format(key, ord(key)))
-				if ord(key)==27:  #  C-[
+				if ord(key)==27:  #  C-[ 
 					break
+				elif key=='l':
+					kb.FORWARD()
+					#curs+=1
+					logger.debug('fw:{}'.format(kb.pos))
+				elif key=='k':
+					#curs-=1
+					kb.BACK()
+					logger.debug('bc:{}'.format(kb.pos))
 			else:
 				time.sleep(0.4)
 	print('(0xff,0xff,0x7f) bytes_to_int = %0x' % bytes_to_int((0xff,0xff,0xfe),'<'))
