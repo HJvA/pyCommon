@@ -109,7 +109,7 @@ class clavier():
 				self.fd=fd
 		else:
 			self.fd = sys.stdin.fileno()
-			logger.debug("new clavier, tty:{} ".format( os.isatty(self.fd) ))
+			#logger.debug("new clavier, tty:{} ".format( os.isatty(self.fd) ))
 	def __enter__(self):
 		"""
 		new_settings = termios.tcgetattr(sys.stdin)
@@ -229,18 +229,18 @@ class cursor(clavier):
 				cmd += ch
 			else:
 				time.sleep(0.1)
-		logger.debug('rdcmd:{}'.format(cmd))
+		#logger.debug('rdcmd:{}'.format(cmd))
 		return cmd
 	def setpos(self, line, column):
 		"""set cursor on ANSI terminal"""
 		self.send(CSI+'%s;%sf' % (line, column))
-		logger.debug('setpos:{},{}'.format(line,column))
+		#logger.debug('setpos:{},{}'.format(line,column))
 	def getpos(self):
 		""" """
 		self.send(CSI+"6n")
 		instr=self.read(eos='R')  #  sys.stdin.read(6)  # '\x1b[46;1R'
 		gpos = list(map(int, re.findall(r'\d+', instr)))
-		logger.debug('gotpos:{}'.format(gpos))
+		#logger.debug('gotpos:{}'.format(gpos))
 		return gpos
 
 	"""
