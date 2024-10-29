@@ -17,7 +17,9 @@ else:
 	from time import time,timezone	# type ignore
 	_S_DELTA = 0
 
-	def seconds_since_epoch(epoch = datetime.datetime.utcfromtimestamp(0), utcnow=datetime.datetime.utcnow()):
+	#def seconds_since_epoch(epoch = datetime.datetime.utcfromtimestamp(0), utcnow=datetime.datetime.utcnow()):
+	def seconds_since_epoch(epoch = datetime.datetime.fromtimestamp(0, datetime.UTC), utcnow=datetime.datetime.utcnow()):
+		#epoch = datetime.datetime.fromtimestamp(timestamp, datetime.UTC)
 		''' time in s since 1970-1-1 midnight utc'''
 		return (utcnow - epoch).total_seconds()
 	
@@ -446,6 +448,7 @@ if __name__ == "__main__":
 		recs.append((jd, math.sin(math.pi*(F-0.25)*2.0), F*24))
 	breakpoint()
 	print("recs:{}".format(recs))
+	logger.info('graphyprint min:{} max:{}'.format(min([rc[1] for rc in recs]),max([rc[1] for rc in recs])))
 	graphyprint(recs)
 else:
 	import logging
