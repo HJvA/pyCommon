@@ -239,7 +239,8 @@ def RoundGrStep(num) -> float:
 
 def normGRdat(fetchrecs, xcol=0, ycol=1, maxlen=1000):
 	''' normalise fetchrecs to have xdat equidistant; missing recs will have nan in ydat '''
-	xdat = [rec[xcol] for rec in fetchrecs]
+	recs = [rc for rc in fetchrecs if not math.isnan(rc[xcol])]
+	xdat = [rec[xcol] for rec in recs]
 	xmin = min(xdat)
 	xmax = max(xdat)
 	xdx = min([xdat[i+1]-xdat[i] for i in range(len(xdat)-1) if xdat[i+1]>xdat[i]])
@@ -259,10 +260,10 @@ def normGRdat(fetchrecs, xcol=0, ycol=1, maxlen=1000):
 		if i<len(ydat) and idx<len(fetchrecs):
 			if math.isnan(ydat[i]):
 				ydat[i]=0.0
-			ydat[i] += fetchrecs[idx][ycol]
+			ydat[i] += recs[idx][ycol]
 		else:
-			logger.warning("i:{}>={} or idx:{}>=len{}".format(i,len(ydat),idx,len(fetchrecs)))
-	return [(xmin+i*dx, y) for i,y in enumerate(ydat)]
+			logger.warning("i:{}>={} or idx:{}>=len{}".format(i,len(ydat),idx,len(recs)))
+	return [(xmin+i*dx, y) for i,y in enumerate(ydat) if not math.isnan(y)]
 	
 def prettyprint(fetchrecs) -> None:
 	''' print the records fetched by fetch method to the console '''
@@ -391,6 +392,7 @@ def printCurve(ydat, height=10, vmax=None, vmin=None, backgndchar=0x2508) -> Non
 	if ydat is None or len(ydat)==0:
 		#logger.error("no data to graph")	
 		return
+	#ydat = [y for y in ydat if not math.isnan(y)]
 	if vmax is None: 
 		vmax = max(ydat)
 	if vmin is None: 

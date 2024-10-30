@@ -457,44 +457,41 @@ def is_correct_password(salt: bytes, pw_hash: bytes, password: str): # -> bool:
 if __name__ == "__main__":
 	if sys.implementation.name != "micropython":
 		import pdb
-	#set_logger(level=logging.INFO)
-	#logging.basicConfig(level=logging.DEBUG, format='%(levelname)s - %(message)s')
-	logger = get_logger(__file__, logging.INFO, logging.DEBUG)
+	logger = get_logger(__file__, logging.INFO, logging.DEBUG) # debug will not print on screen 
 	if sys.implementation.name != "micropython":
 		print('hand %d lev %s' % (len(logger.handlers), logger.handlers[0].flush()))
-	#logger.handlers[0].setLevel(logging.DEBUG)
-	#logger.setLevel(logging.DEBUG)
 	logger.info('hallo wereld')
 	logger.debug('debugging')
 	logger.warning(os.getcwd())
 	if sys.implementation.name != "micropython":
 		logger.error(os.getlogin())
 	
-	#while True:
-	#with keybHit() as kb:
 	if sys.implementation.name == "micropython":
 		fd=None
+	elif os.name!="nt":
+		fd =-1 if os.getgid()<100 else None  # admin on linux (os.name='posix')
 	else:
-		fd =-1 if os.getgid()<100 else None
-	#Cursor.setpos(12,3)
-	#curs = Cursor.getpos()	
+		fd=-1
 	with cursor(fd) as kb:  # with clavier(fd) as kb:
 		kb.setpos(20,10)
 		breakpoint()
 		while True:
 			if kb.kbhit():
 				key = kb.getch()
-				logger.info("key:{} ord:{}".format(key, ord(key)))
 				if ord(key)==27:  #  C-[ 
 					break
 				elif key=='l':
 					kb.FORWARD()
-					#curs+=1
 					logger.debug('fw:{}'.format(kb.pos))
 				elif key=='k':
-					#curs-=1
 					kb.BACK()
 					logger.debug('bc:{}'.format(kb.pos))
+				elif key=='h':
+					kb.UP()
+				elif key=='j':
+					kb.DOWN()
+				else:
+					logger.info("key:{} ord:{}".format(key, ord(key)))
 			else:
 				time.sleep(0.4)
 	print('(0xff,0xff,0x7f) bytes_to_int = %0x' % bytes_to_int((0xff,0xff,0xfe),'<'))
